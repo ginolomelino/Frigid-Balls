@@ -1,0 +1,12 @@
+@font-face {
+    font-family: Basic;
+    src: url('fonts/Basic.ttf');
+}
+body{
+	color:#000;
+}
+#playfield{
+	border:solid 1px #000;
+	margin:0px;
+	padding:0px;
+}
