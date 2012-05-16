@@ -6,7 +6,15 @@ body{
 	color:#000;
 }
 #playfield{
+	float:right;
 	border:solid 1px #000;
 	margin:0px;
 	padding:0px;
+}
+#info{
+	float:left;
+	height:640px;
+}
+#fps{
+	
 }

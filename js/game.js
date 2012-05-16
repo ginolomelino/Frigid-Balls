@@ -26,7 +26,6 @@ window.requestAnimFrame = ( function() {
 	function( callback ){ window.setTimeout(callback, 1000 / 60); };
 } )();
 
-
 // parse input
 function inputHandler(event) {
 	switch(event.keyCode) {
@@ -46,28 +45,20 @@ function inputHandler(event) {
 			break;
 		case 52: // 4
 			break;
-		case 66: // B
-			if (event.type == 'keydown') {
-				game.Blizzard();
-			}
+		case 98: // b - lowercase
+			game.Blizzard();
 			break;
-		case 68: // D
-			if (event.type == 'keydown') {
-				game.DecreaseSnow();
-			}
+		case 100: // d - lowercase
+			game.DecreaseSnow();
 			break;
-		case 73: // I
-			if (event.type == 'keydown') {
-				game.IncreaseSnow();
-			}
+		case 105: // i - lowercase
+			game.IncreaseSnow();
 			break;
 		case 112: // p - lowercase
 			game.Pause();
 			break;
-		case 83: // S
-			if (event.type == 'keydown') {
-				game.ToggleSnow();
-			}
+		case 115: // s - lowercase
+			game.ToggleSnow();
 			break;
 		case 27: // escape
 			game.LoadMenu();
@@ -135,13 +126,17 @@ function Game() {
 		scoreboard.LoadImage('images/scorepanel.jpg');
 		paddle = new Paddle();
 		paddle.LoadImage('images/paddle.png');
-		this.MakeBalls();
+		var logo = new Logo();
+		logo.LoadImage('images/frigidballs.jpg');
+		var objectsToDraw = [];
+		objectsToDraw.push(playfield,scoreboard,logo);
 		
-		this.interval = setInterval(self.InitialUpdateRun,this.checkInterval);
+		// Show splash screen
+		this.splashTimer = setInterval(function(){self.ShowSplash(objectsToDraw,canvas)},30);
 	}
 	
 	this.InitialUpdateRun = function() {
-		if (playfield.Loaded() && self.balls[0].Loaded() && paddle.Loaded() && scoreboard.Loaded()) {
+		if (playfield.Loaded() && paddle.Loaded() && scoreboard.Loaded()) {
 			clearInterval(self.interval);
 			$(document).mousemove(function(e) {
 				e.preventDefault();
@@ -155,8 +150,19 @@ function Game() {
 		}
 	}
 	
-	this.ShowSplash = function(image,context) {
-		context.drawImage(image,0,100);
+	this.ShowSplash = function(objects,context) {
+		var self = this;
+		for(i=0;i<objects.length;i++) {
+			if (!objects[i].Loaded()) {
+				console.log('Not Loaded: ');
+				console.log(objects[i]);
+				return 0;
+			} else {
+				objects[i].Draw(context);
+			}
+		}
+		clearInterval(this.splashTimer);
+		setTimeout(function(){self.interval = setInterval(self.InitialUpdateRun,self.checkInterval)},3000);
 	}
 	
 	this.Loop = function() {
@@ -249,7 +255,7 @@ function Game() {
 	
 	this.DrawBalls = function(balls,context) {
 		for(i=0;i<balls.length;i++) {
-			if (balls[i].Loaded) {
+			if (balls[i].Loaded()) {
 				balls[i].Draw(context);
 			}
 		}
@@ -265,7 +271,6 @@ function Game() {
 	}
 	
 	this.MoveSnow = function() {
-		console.log('test');
 		for(i=0;i<this.snow.length;i++) {
 			this.snow[i].Move();
 			if (this.snow[i].y > fieldHeight) {
@@ -276,7 +281,7 @@ function Game() {
 	
 	this.DrawSnow = function(snowflakes,context) {
 		for(i=0;i<snowflakes.length;i++) {
-			if (snowflakes[i].Loaded) {
+			if (snowflakes[i].Loaded()) {
 				snowflakes[i].Draw(context);
 			}
 		}
@@ -554,6 +559,10 @@ function Score(x,y) {
 	}
 }
 
+function Logo() {
+	
+}
+
 function Drawable() {
 	this.x = 0;
 	this.y = 0;
@@ -621,3 +630,5 @@ Scoreboard.prototype = new Drawable();
 Scoreboard.prototype.constructor = Drawable;
 Paddle.prototype = new Drawable();
 Paddle.prototype.constructor = Drawable;
+Logo.prototype = new Drawable();
+Logo.prototype.constructor = Drawable;

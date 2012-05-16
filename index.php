@@ -7,6 +7,7 @@
 <body>
 	<div id="fps">fps: 0</div>
 	<canvas id="playfield" width="680px" height="640px"></canvas>
+	
 	<script type="text/javascript">
 		var game = new Game();
 		game.Run();
