@@ -1,3 +1,10 @@
+// Features ToDo:
+// Make Icicles which hurt you
+// Under blizzard conditions, random gusts of wind move the snow and balls, making it harder to catch them.
+
+// Bugs ToDo:
+// If the framerate drops, the rate of the balls doesn't drop so they clump closer together as the level goes on.  This can make it artificially impossible to hit all the balls.
+
 var _canvas = undefined;
 var _buffer = undefined;
 var canvas = undefined;
@@ -9,12 +16,13 @@ var debug = true;
 
 // variables for fps measurements
 var fps = 0, now, lastUpdate = (new Date)*1 - 1;
+
 // Smooths out fps rate so minor hickups don't kill it
 var fpsFilter = 50;
 
 var directions = {up:{value:0},down:{value:1},left:{value:2},right:{value:3}};
 var snowLevels = {blizzard:{value:30,name:'blizzard'},high:{value:15,name:'high'},medium:{value:8,name:'medium'},low:{value:2,name:'low'}};
-var flakeSizes = {small:{value:0,name:'small'},medium:{value:1,name:'medium'},large:{value:2,name:'large'}};
+var flakeSizes = {small:{value:0,name:'small',src:'images/snowflakeSmall.png'},medium:{value:1,name:'medium',src:'images/snowflakeMedium.png'},large:{value:2,name:'large',src:'images/snowflakeLarge.png'}};
 
 // Use requestAnimFrame and fallback to setTimeout if not supported
 window.requestAnimFrame = ( function() {
@@ -85,14 +93,24 @@ function Game() {
 	var snowDensity = snowLevels.low;
 	var scoreboard = undefined;
 	this.gameLoop = undefined;
-	this.snowLoop = undefined;
 	this.ballLoop = undefined;
+	this.snowLoop = undefined;
 	this.interval = undefined;
 	this.splashTimer = undefined;
 	this.paused = false;
 	this.score = 0;
 	this.scores = [];
 	this.ready = false;
+	this.ballCount = 0;
+	this.ballsSquashed = 0;
+	this.ballsPerLevel = 10;
+	this.level = 1;
+	this.leveledUp = false;
+	this.ballsThisLevel = this.ballsPerLevel * (this.level / 2);
+	this.ballSpeed = 3;
+	this.defaultBallFrequency = 4000;
+	this.minimumBallFrequencyReduction = 3000;
+	this.ballFrequency = Math.floor(this.defaultBallFrequency - ((this.minimumBallFrequencyReduction / this.ballsThisLevel) * this.ballCount));
 	
 	this.Run = function() {
 		this.Initialize();
@@ -120,6 +138,9 @@ function Game() {
 			inputHandler(e);
 		});
 		
+		this.level = 1;
+		console.log(this.ballsThisLevel);
+		
 		playfield = new Playfield();
 		playfield.LoadImage('images/map.jpg');
 		scoreboard = new Scoreboard();
@@ -146,7 +167,7 @@ function Game() {
 			// Start game loop
 			self.Loop();
 			self.snowLoop = setInterval(self.SnowLoop,500);
-			self.ballLoop = setInterval(self.BallLoop,5000);
+			self.BallLoop();
 		}
 	}
 	
@@ -178,8 +199,10 @@ function Game() {
 	}
 	
 	this.BallLoop = function() {
-		if (self.paused == false) {
+		if (self.paused == false && self.ballCount < self.ballsThisLevel) {
 			self.MakeBalls();
+			self.ballFrequency = Math.floor(self.defaultBallFrequency - ((self.minimumBallFrequencyReduction / self.ballsThisLevel) * self.ballCount));
+			this.ballLoop = setTimeout(self.BallLoop,self.ballFrequency);
 		}
 	}
 	
@@ -218,6 +241,11 @@ function Game() {
 		}
 		this.DrawScore(buffer,scoreboard);
 		
+		if (this.leveledUp == true) {
+			console.log('test');
+			buffer.fillText('Level Up!',100,100);
+		}
+		
 		// Draw buffer to canvas
 		canvas.drawImage(_buffer, 0, 0);
 		
@@ -229,6 +257,26 @@ function Game() {
 		}
 	}
 	
+	this.LevelUp = function() {
+		this.level++;
+		this.ballCount = 0;
+		this.ballsSquashed = 0;
+		this.ballsThisLevel = this.ballsPerLevel * (this.level / 2);
+		this.ballSpeed++;
+		this.ballFrequency = 4000;
+		
+		// Tell the draw loop to show the level up message
+		this.leveledUp = true;
+		
+		// Tell the draw loop to stop showing the level up message after 3 seconds
+		setTimeout(function(){self.leveledUp=false},3000);
+		
+		// Finally start the BallLoop again
+		this.ballLoop = setTimeout(this.BallLoop,this.ballFrequency);
+		
+		console.log('Level Up - ' + this.ballsThisLevel + ' balls');
+	}
+	
 	this.LoadMenu = function() {
 		console.log('Menu Loaded');
 	}
@@ -237,18 +285,23 @@ function Game() {
 		var tempBall = new Ball();
 		tempBall.LoadImage('images/ball.png');
 		this.balls.push(tempBall);
+		this.ballCount++;
 	}
 	
 	this.MoveBalls = function(paddle) {
 		for(i=0;i<this.balls.length;i++) {
 			if(!this.balls[i].DetectCollision(paddle)) {
-				this.balls[i].Move();
+				this.balls[i].Move(this.ballSpeed);
 				if (this.balls[i].y > fieldHeight) {
 					this.balls.splice(i,1);
 				}
 			} else {
 				this.scores.push(new Score(this.balls[i].x,this.balls[i].y));
 				this.balls.splice(i,1);
+				this.ballsSquashed++;
+				if (this.ballsSquashed == this.ballCount && this.ballsSquashed >= this.ballsThisLevel ) {
+					this.LevelUp();
+				}
 			}
 		}
 	}
@@ -346,8 +399,10 @@ function Game() {
 	
 	this.Pause = function() {
 		if (this.paused == false) {
+			clearTimeout(this.BallLoop);
 			this.paused = true;
 		} else {
+			this.ballLoop = setTimeout(this.BallLoop,this.ballFrequency);
 			this.paused = false;
 		}
 	}
@@ -356,7 +411,6 @@ function Game() {
 function Ball() {
 	this.y = -100;
 	this.directionY = directions.down;
-	this.speed = 3;
 	this.value = 100;
 	console.log(this);
 	
@@ -375,9 +429,9 @@ function Ball() {
 		}
 	}
 	
-	this.Move = function() {
+	this.Move = function(speed) {
 		if (this.paused == false) {
-			this.y += this.speed;
+			this.y += speed;
 		}
 	}
 	
@@ -467,7 +521,6 @@ function Snowflake() {
 	this.size = Math.floor(Math.random() * (Object.keys(flakeSizes).length));
 	this.xRange = Math.floor(Math.random() * 50);
 	this.speed = Math.floor(Math.random() * 3);
-	console.log(this);
 	
 	this.PickDirection = function() {
 		return directions.left;
@@ -477,13 +530,7 @@ function Snowflake() {
 		var self = this;
 		var image = new Image();
 		image.src = '';
-		if (self.size == 0) {
-			image.src = 'images/snowflakeSmall.png';
-		} else if (self.size == 1) {
-			image.src = 'images/snowflakeMedium.png';
-		} else if (self.size == 2) {
-			image.src = 'images/snowflakeLarge.png';
-		}
+		image.src = flakeSizes[Object.keys(flakeSizes)[this.size]].src;
 		
 		image.onload = function() {
 			self.image = image;
