@@ -3,7 +3,7 @@
 // Under blizzard conditions, random gusts of wind move the snow and balls, making it harder to catch them.
 
 // Bugs ToDo:
-// If the framerate drops, the rate of the balls doesn't drop so they clump closer together as the level goes on.  This can make it artificially impossible to hit all the balls.
+// 
 
 var _canvas = undefined;
 var _buffer = undefined;
@@ -12,7 +12,7 @@ var buffer = undefined;
 var fieldWidth = 0;
 var fieldHeight = 0;
 var measureFPS = true;
-var debug = true;
+var debug = false;
 
 // variables for fps measurements
 var fps = 0, now, lastUpdate = (new Date)*1 - 1;
@@ -34,9 +34,27 @@ window.requestAnimFrame = ( function() {
 	function( callback ){ window.setTimeout(callback, 1000 / 60); };
 } )();
 
+// Wrap JS Timer function so I can pause and resume timers
+function Timer(callback, delay) {
+	var timerId, start, remaining = delay;
+	
+	this.Pause = function() {
+		remaining -= new Date() - start;
+		clearTimeout(timerId);
+	};
+	
+	this.Resume = function() {
+		start = new Date();
+		timerId = setTimeout(callback, remaining);
+	};
+	
+	this.Resume();
+}
+
 // parse input
-function inputHandler(event) {
-	switch(event.keyCode) {
+function inputHandler(e) {
+	var unicode = e.keyCode? e.keyCode : e.charCode;
+	switch(unicode) {
 		case 37: //left arrow
 			break;
 		case 38: // up arrow
@@ -72,7 +90,7 @@ function inputHandler(event) {
 			game.LoadMenu();
 			break;
 		default:
-			console.log(event.keyCode);
+			console.log(e);
 			break;
 	}
 }
@@ -139,7 +157,6 @@ function Game() {
 		});
 		
 		this.level = 1;
-		console.log(this.ballsThisLevel);
 		
 		playfield = new Playfield();
 		playfield.LoadImage('images/map.jpg');
@@ -166,7 +183,7 @@ function Game() {
 			
 			// Start game loop
 			self.Loop();
-			self.snowLoop = setInterval(self.SnowLoop,500);
+			self.SnowLoop();
 			self.BallLoop();
 		}
 	}
@@ -195,14 +212,19 @@ function Game() {
 	this.SnowLoop = function() {
 		if (snowStatus && self.paused == false) {
 			self.MakeSnow();
+			self.snowLoop = new Timer(self.SnowLoop,500);
 		}
 	}
 	
 	this.BallLoop = function() {
-		if (self.paused == false && self.ballCount < self.ballsThisLevel) {
-			self.MakeBalls();
-			self.ballFrequency = Math.floor(self.defaultBallFrequency - ((self.minimumBallFrequencyReduction / self.ballsThisLevel) * self.ballCount));
-			this.ballLoop = setTimeout(self.BallLoop,self.ballFrequency);
+		if (self.paused == false) {
+			if (self.ballCount < self.ballsThisLevel) {
+				self.MakeBalls();
+				self.ballFrequency = Math.floor(self.defaultBallFrequency - ((self.minimumBallFrequencyReduction / self.ballsThisLevel) * self.ballCount));
+				self.ballLoop = new Timer(self.BallLoop,self.ballFrequency);
+			} else {
+				self.LevelEnd();
+			}
 		}
 	}
 	
@@ -242,7 +264,6 @@ function Game() {
 		this.DrawScore(buffer,scoreboard);
 		
 		if (this.leveledUp == true) {
-			console.log('test');
 			buffer.fillText('Level Up!',100,100);
 		}
 		
@@ -272,9 +293,20 @@ function Game() {
 		setTimeout(function(){self.leveledUp=false},3000);
 		
 		// Finally start the BallLoop again
-		this.ballLoop = setTimeout(this.BallLoop,this.ballFrequency);
+		this.ballLoop = new Timer(this.BallLoop,this.ballFrequency);
 		
 		console.log('Level Up - ' + this.ballsThisLevel + ' balls');
+	}
+	
+	this.LevelEnd = function() {
+		// Display Level Failed message and start the level over
+		if (this.ballsSquashed == this.ballsThisLevel) {
+			// if level cleared
+			this.LevelUp();
+		} else {
+			// if any balls missed, start level over
+			this.RestartLevel();
+		}
 	}
 	
 	this.LoadMenu = function() {
@@ -294,13 +326,16 @@ function Game() {
 				this.balls[i].Move(this.ballSpeed);
 				if (this.balls[i].y > fieldHeight) {
 					this.balls.splice(i,1);
+					if (this.ballCount >= this.ballsThisLevel) {
+						this.LevelEnd();
+					}
 				}
 			} else {
 				this.scores.push(new Score(this.balls[i].x,this.balls[i].y));
 				this.balls.splice(i,1);
 				this.ballsSquashed++;
-				if (this.ballsSquashed == this.ballCount && this.ballsSquashed >= this.ballsThisLevel ) {
-					this.LevelUp();
+				if (this.ballCount >= this.ballsThisLevel) {
+					this.LevelEnd();
 				}
 			}
 		}
@@ -399,10 +434,11 @@ function Game() {
 	
 	this.Pause = function() {
 		if (this.paused == false) {
-			clearTimeout(this.BallLoop);
+			this.ballLoop.Pause();
 			this.paused = true;
 		} else {
-			this.ballLoop = setTimeout(this.BallLoop,this.ballFrequency);
+			this.ballLoop.Resume();
+			//this.timeToNextBall = 0;
 			this.paused = false;
 		}
 	}
