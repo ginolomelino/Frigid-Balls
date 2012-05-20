@@ -129,6 +129,7 @@ function Game() {
 	this.defaultBallFrequency = 4000;
 	this.minimumBallFrequencyReduction = 3000;
 	this.ballFrequency = Math.floor(this.defaultBallFrequency - ((this.minimumBallFrequencyReduction / this.ballsThisLevel) * this.ballCount));
+	this.timeToNextBall = 0;
 	
 	this.Run = function() {
 		this.Initialize();
@@ -216,11 +217,11 @@ function Game() {
 	
 	this.BallLoop = function() {
 		if (self.paused == false) {
+			this.timeToNextBall = 0;
 			if (self.ballCount < self.ballsThisLevel) {
 				self.MakeBalls();
 				self.ballFrequency = Math.floor(self.defaultBallFrequency - ((self.minimumBallFrequencyReduction / self.ballsThisLevel) * self.ballCount));
 				self.ballTimer = new Date();
-				//self.ballLoop = new Timer(self.BallLoop,self.ballFrequency);
 			}
 		}
 	}
@@ -235,7 +236,7 @@ function Game() {
 			if (now - this.snowTimer >= this.defaultSnowFrequency) {
 				this.SnowLoop();
 			}
-			if (now - this.ballTimer >= this.ballFrequency && this.ballCount < this.ballsThisLevel) {
+			if ((now - this.ballTimer) + this.timeToNextBall >= this.ballFrequency && this.ballCount < this.ballsThisLevel) {
 				this.BallLoop();
 			}
 			
@@ -300,11 +301,14 @@ function Game() {
 		
 		// Tell the draw loop to stop showing the level up message after 3 seconds
 		setTimeout(function(){self.levelStatus=statuses.started},3000);
-		
-		console.log('Level Up - ' + this.ballsThisLevel + ' balls');
 	}
 	
 	this.RestartLevel = function() {
+		// Roll back scored balls
+		for (i=0;i<this.ballsSquashed;i++) {
+			this.score -= 100;
+		}
+		
 		this.ballCount = 0;
 		this.ballsSquashed = 0;
 		this.completedBalls = 0;
@@ -453,8 +457,11 @@ function Game() {
 	
 	this.Pause = function() {
 		if (this.paused == false) {
+			var now = new Date();
+			this.timeToNextBall = now - this.ballTimer;
 			this.paused = true;
 		} else {
+			this.ballTimer = new Date();
 			this.paused = false;
 		}
 	}
