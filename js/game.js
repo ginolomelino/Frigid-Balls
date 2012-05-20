@@ -2,9 +2,6 @@
 // Make Icicles which hurt you
 // Under blizzard conditions, random gusts of wind move the snow and balls, making it harder to catch them.
 
-// Bugs ToDo:
-// 
-
 var _canvas = undefined;
 var _buffer = undefined;
 var canvas = undefined;
@@ -23,6 +20,7 @@ var fpsFilter = 50;
 var directions = {up:{value:0},down:{value:1},left:{value:2},right:{value:3}};
 var snowLevels = {blizzard:{value:30,name:'blizzard'},high:{value:15,name:'high'},medium:{value:8,name:'medium'},low:{value:2,name:'low'}};
 var flakeSizes = {small:{value:0,name:'small',src:'images/snowflakeSmall.png'},medium:{value:1,name:'medium',src:'images/snowflakeMedium.png'},large:{value:2,name:'large',src:'images/snowflakeLarge.png'}};
+var statuses = {started:{value:0,message:''},complete:{value:1,message:'Level Up!'},failed:{value:2,message:'Level Failed. Try Again.'}};
 
 // Use requestAnimFrame and fallback to setTimeout if not supported
 window.requestAnimFrame = ( function() {
@@ -111,8 +109,8 @@ function Game() {
 	var snowDensity = snowLevels.low;
 	var scoreboard = undefined;
 	this.gameLoop = undefined;
-	this.ballLoop = undefined;
-	this.snowLoop = undefined;
+	this.ballTimer = new Date();
+	this.snowTimer = new Date();
 	this.interval = undefined;
 	this.splashTimer = undefined;
 	this.paused = false;
@@ -120,12 +118,14 @@ function Game() {
 	this.scores = [];
 	this.ready = false;
 	this.ballCount = 0;
+	this.completedBalls = 0;
 	this.ballsSquashed = 0;
 	this.ballsPerLevel = 10;
 	this.level = 1;
-	this.leveledUp = false;
+	this.levelStatus = statuses.started;
 	this.ballsThisLevel = this.ballsPerLevel * (this.level / 2);
 	this.ballSpeed = 3;
+	this.defaultSnowFrequency = 500;
 	this.defaultBallFrequency = 4000;
 	this.minimumBallFrequencyReduction = 3000;
 	this.ballFrequency = Math.floor(this.defaultBallFrequency - ((this.minimumBallFrequencyReduction / this.ballsThisLevel) * this.ballCount));
@@ -183,8 +183,6 @@ function Game() {
 			
 			// Start game loop
 			self.Loop();
-			self.SnowLoop();
-			self.BallLoop();
 		}
 	}
 	
@@ -212,7 +210,7 @@ function Game() {
 	this.SnowLoop = function() {
 		if (snowStatus && self.paused == false) {
 			self.MakeSnow();
-			self.snowLoop = new Timer(self.SnowLoop,500);
+			self.snowTimer = new Date();
 		}
 	}
 	
@@ -221,24 +219,31 @@ function Game() {
 			if (self.ballCount < self.ballsThisLevel) {
 				self.MakeBalls();
 				self.ballFrequency = Math.floor(self.defaultBallFrequency - ((self.minimumBallFrequencyReduction / self.ballsThisLevel) * self.ballCount));
-				self.ballLoop = new Timer(self.BallLoop,self.ballFrequency);
-			} else {
-				self.LevelEnd();
+				self.ballTimer = new Date();
+				//self.ballLoop = new Timer(self.BallLoop,self.ballFrequency);
 			}
 		}
 	}
 	
 	this.Update = function() {
-		if (self.paused == false) {
+		if (this.paused == false) {
 			if (snowStatus) {
-				self.MoveSnow();
+				this.MoveSnow();
 			}
 			
-			if (self.scores) {
-				self.MoveScores();
+			var now = new Date();
+			if (now - this.snowTimer >= this.defaultSnowFrequency) {
+				this.SnowLoop();
+			}
+			if (now - this.ballTimer >= this.ballFrequency && this.ballCount < this.ballsThisLevel) {
+				this.BallLoop();
 			}
 			
-			self.MoveBalls(paddle);
+			if (this.scores) {
+				this.MoveScores();
+			}
+			
+			this.MoveBalls(paddle);
 			if (!paddle.DetectCollision(playfield)) {
 				paddle.Move();
 			}
@@ -263,8 +268,11 @@ function Game() {
 		}
 		this.DrawScore(buffer,scoreboard);
 		
-		if (this.leveledUp == true) {
-			buffer.fillText('Level Up!',100,100);
+		if (this.levelStatus != statuses.started) {
+			// Stops balls from dropping while levelStatus message is displayed.
+			this.ballTimer = new Date();
+			
+			buffer.fillText(this.levelStatus.message,100,100);
 		}
 		
 		// Draw buffer to canvas
@@ -282,20 +290,29 @@ function Game() {
 		this.level++;
 		this.ballCount = 0;
 		this.ballsSquashed = 0;
+		this.completedBalls = 0;
 		this.ballsThisLevel = this.ballsPerLevel * (this.level / 2);
 		this.ballSpeed++;
 		this.ballFrequency = 4000;
 		
 		// Tell the draw loop to show the level up message
-		this.leveledUp = true;
+		this.levelStatus = statuses.complete;
 		
 		// Tell the draw loop to stop showing the level up message after 3 seconds
-		setTimeout(function(){self.leveledUp=false},3000);
-		
-		// Finally start the BallLoop again
-		this.ballLoop = new Timer(this.BallLoop,this.ballFrequency);
+		setTimeout(function(){self.levelStatus=statuses.started},3000);
 		
 		console.log('Level Up - ' + this.ballsThisLevel + ' balls');
+	}
+	
+	this.RestartLevel = function() {
+		this.ballCount = 0;
+		this.ballsSquashed = 0;
+		this.completedBalls = 0;
+		// Tell the draw loop to show the level failed message
+		this.levelStatus = statuses.failed;
+		
+		// Tell the draw loop to stop showing the level up message after 3 seconds
+		setTimeout(function(){self.levelStatus=statuses.started},3000);
 	}
 	
 	this.LevelEnd = function() {
@@ -326,7 +343,8 @@ function Game() {
 				this.balls[i].Move(this.ballSpeed);
 				if (this.balls[i].y > fieldHeight) {
 					this.balls.splice(i,1);
-					if (this.ballCount >= this.ballsThisLevel) {
+					this.completedBalls++;
+					if (this.completedBalls >= this.ballsThisLevel) {
 						this.LevelEnd();
 					}
 				}
@@ -334,7 +352,8 @@ function Game() {
 				this.scores.push(new Score(this.balls[i].x,this.balls[i].y));
 				this.balls.splice(i,1);
 				this.ballsSquashed++;
-				if (this.ballCount >= this.ballsThisLevel) {
+				this.completedBalls++;
+				if (this.completedBalls >= this.ballsThisLevel) {
 					this.LevelEnd();
 				}
 			}
@@ -434,11 +453,8 @@ function Game() {
 	
 	this.Pause = function() {
 		if (this.paused == false) {
-			this.ballLoop.Pause();
 			this.paused = true;
 		} else {
-			this.ballLoop.Resume();
-			//this.timeToNextBall = 0;
 			this.paused = false;
 		}
 	}
@@ -573,7 +589,8 @@ function Snowflake() {
 			self.width = image.width;
 			self.height = image.height;
 			self.x = Math.floor(Math.random() * (fieldWidth - self.width));
-			if (self.x + self.xRange > fieldWidth) { self.xRange = fieldWidth - self.x; }
+			if (self.x + self.width + self.xRange > fieldWidth) { self.x = fieldWidth - self.xRange - self.width; }
+			if (self.x - self.xRange < 0) { self.x = self.x + self.xRange; }
 			if (self.speed < 1) { self.speed = 1; }
 			self.y = Math.floor(Math.random() * -100);
 			self.xOrigin = self.x;
