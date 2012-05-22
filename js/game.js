@@ -104,6 +104,7 @@ function Game() {
 	var playfield = undefined;
 	this.balls = [];
 	var paddle = undefined;
+	var icicle = undefined;
 	this.snow = [];
 	var snowStatus = true;
 	var snowDensity = snowLevels.low;
@@ -111,6 +112,7 @@ function Game() {
 	this.gameLoop = undefined;
 	this.ballTimer = new Date();
 	this.snowTimer = new Date();
+	this.icicleTimer = new Date();
 	this.interval = undefined;
 	this.splashTimer = undefined;
 	this.paused = false;
@@ -130,6 +132,7 @@ function Game() {
 	this.minimumBallFrequencyReduction = 3000;
 	this.ballFrequency = Math.floor(this.defaultBallFrequency - ((this.minimumBallFrequencyReduction / this.ballsThisLevel) * this.ballCount));
 	this.timeToNextBall = 0;
+	this.icicleFrequency = 5000;
 	
 	this.Run = function() {
 		this.Initialize();
@@ -167,6 +170,9 @@ function Game() {
 		paddle.LoadImage('images/paddle.png');
 		var logo = new Logo();
 		logo.LoadImage('images/frigidballs.jpg');
+		icicle = new Icicle();
+		icicle.LoadImage('images/icicle.png');
+		
 		var objectsToDraw = [];
 		objectsToDraw.push(playfield,scoreboard,logo);
 		
@@ -175,7 +181,7 @@ function Game() {
 	}
 	
 	this.InitialUpdateRun = function() {
-		if (playfield.Loaded() && paddle.Loaded() && scoreboard.Loaded()) {
+		if (playfield.Loaded() && paddle.Loaded() && scoreboard.Loaded() && icicle.Loaded()) {
 			clearInterval(self.interval);
 			$(document).mousemove(function(e) {
 				e.preventDefault();
@@ -239,6 +245,19 @@ function Game() {
 			if ((now - this.ballTimer) + this.timeToNextBall >= this.ballFrequency && this.ballCount < this.ballsThisLevel) {
 				this.BallLoop();
 			}
+			if (now - this.icicleTimer >= this.icicleFrequency) {
+				if(!icicle.DetectCollision(paddle)) {
+					icicle.Move();
+					if (icicle.y > fieldHeight) {
+						icicle.Reset();
+						this.icicleTimer = new Date();
+					}
+				} else {
+					icicle.Reset();
+					this.balls = [];
+					this.LevelEnd();
+				}
+			}
 			
 			if (this.scores) {
 				this.MoveScores();
@@ -264,6 +283,9 @@ function Game() {
 			this.DrawScores(this.scores,buffer);
 		}
 		paddle.Draw(buffer);
+		
+		icicle.Draw(buffer);
+		
 		if (snowStatus) {
 			this.DrawSnow(this.snow,buffer);
 		}
@@ -272,6 +294,7 @@ function Game() {
 		if (this.levelStatus != statuses.started) {
 			// Stops balls from dropping while levelStatus message is displayed.
 			this.ballTimer = new Date();
+			this.icicleTimer = new Date();
 			
 			buffer.fillText(this.levelStatus.message,100,100);
 		}
@@ -670,6 +693,35 @@ function Logo() {
 	
 }
 
+function Icicle() {
+	this.y = -100;
+	this.speed = 10;
+	console.log(this);
+	
+	this.LoadImage = function(imgSrc) {
+		var self = this;
+		var image = new Image();
+		image.src = '';
+		image.src = imgSrc;
+		
+		image.onload = function() {
+			self.image = image;
+			self.width = image.width;
+			self.height = image.height;
+			self.x = Math.floor(Math.random() * (fieldWidth - self.width));
+			self.loaded = true;
+		}
+	}
+	
+	this.Move = function(paddle) {
+		this.y += this.speed;
+	}
+	
+	this.Reset = function() {
+		this.y = -100;
+	}
+}
+
 function Drawable() {
 	this.x = 0;
 	this.y = 0;
@@ -739,3 +791,5 @@ Paddle.prototype = new Drawable();
 Paddle.prototype.constructor = Drawable;
 Logo.prototype = new Drawable();
 Logo.prototype.constructor = Drawable;
+Icicle.prototype = new Drawable();
+Icicle.prototype.constructor = Drawable;
