@@ -20,7 +20,7 @@ var fpsFilter = 50;
 var directions = {up:{value:0},down:{value:1},left:{value:2},right:{value:3}};
 var snowLevels = {blizzard:{value:30,name:'blizzard'},high:{value:15,name:'high'},medium:{value:8,name:'medium'},low:{value:2,name:'low'}};
 var flakeSizes = {small:{value:0,name:'small',src:'images/snowflakeSmall.png'},medium:{value:1,name:'medium',src:'images/snowflakeMedium.png'},large:{value:2,name:'large',src:'images/snowflakeLarge.png'}};
-var statuses = {started:{value:0,message:''},complete:{value:1,message:'Level Up!'},failed:{value:2,message:'Level Failed. Try Again.'}};
+var statuses = {begin:{value:0,message:'Begin Level!'},started:{value:0,message:''},complete:{value:1,message:'Level Up!'},failed:{value:2,message:'Level Failed. Try Again.'}};
 
 // Use requestAnimFrame and fallback to setTimeout if not supported
 window.requestAnimFrame = ( function() {
@@ -85,7 +85,11 @@ function inputHandler(e) {
 			game.ToggleSnow();
 			break;
 		case 27: // escape
-			game.LoadMenu();
+			if (game.menu.displayed == false) {
+				game.menu.Show();
+			} else {
+				game.menu.Hide();
+			}
 			break;
 		default:
 			console.log(e);
@@ -102,6 +106,7 @@ function MouseHandler(event,paddle,playfield) {
 function Game() {
 	var self = this;
 	var playfield = undefined;
+	var logo = undefined;
 	this.balls = [];
 	var paddle = undefined;
 	var icicle = undefined;
@@ -114,7 +119,7 @@ function Game() {
 	this.snowTimer = new Date();
 	this.icicleTimer = new Date();
 	this.interval = undefined;
-	this.splashTimer = undefined;
+	this.menuTimer = undefined;
 	this.paused = false;
 	this.score = 0;
 	this.scores = [];
@@ -133,6 +138,7 @@ function Game() {
 	this.ballFrequency = Math.floor(this.defaultBallFrequency - ((this.minimumBallFrequencyReduction / this.ballsThisLevel) * this.ballCount));
 	this.timeToNextBall = 0;
 	this.icicleFrequency = 5000;
+	this.menu = undefined;
 	
 	this.Run = function() {
 		this.Initialize();
@@ -154,6 +160,10 @@ function Game() {
 			buffer.font = "16px Basic";
 		}
 		
+		// Make menu
+		this.menu = new Menu();
+		this.menu.AddButton('Start',100,500,'images/startButton.png',function(){self.StartGame();});
+		
 		// Create event handler
 		$(document).keypress(function(e) {
 			e.preventDefault();
@@ -168,16 +178,11 @@ function Game() {
 		scoreboard.LoadImage('images/scorepanel.jpg');
 		paddle = new Paddle();
 		paddle.LoadImage('images/paddle.png');
-		var logo = new Logo();
-		logo.LoadImage('images/frigidballs.jpg');
 		icicle = new Icicle();
 		icicle.LoadImage('images/icicle.png');
 		
-		var objectsToDraw = [];
-		objectsToDraw.push(playfield,scoreboard,logo);
+		this.ShowMenu(this.menu,buffer);
 		
-		// Show splash screen
-		this.splashTimer = setInterval(function(){self.ShowSplash(objectsToDraw,canvas)},30);
 	}
 	
 	this.InitialUpdateRun = function() {
@@ -193,19 +198,17 @@ function Game() {
 		}
 	}
 	
-	this.ShowSplash = function(objects,context) {
-		var self = this;
-		for(i=0;i<objects.length;i++) {
-			if (!objects[i].Loaded()) {
-				console.log('Not Loaded: ');
-				console.log(objects[i]);
-				return 0;
-			} else {
-				objects[i].Draw(context);
-			}
+	this.ShowMenu = function(menu,context) {
+		this.paused = true;
+		menu.Show();
+		this.interval = setInterval(this.InitialUpdateRun,this.checkInterval);
+	}
+	
+	this.StartGame = function() {
+		if (this.menu.Displayed()) {
+			this.menu.Hide();
 		}
-		clearInterval(this.splashTimer);
-		setTimeout(function(){self.interval = setInterval(self.InitialUpdateRun,self.checkInterval)},3000);
+		this.paused = false;
 	}
 	
 	this.Loop = function() {
@@ -299,6 +302,14 @@ function Game() {
 			buffer.fillText(this.levelStatus.message,100,100);
 		}
 		
+		if (this.menu.Displayed() && this.menu.Loaded()) {
+			this.menu.Draw(buffer);
+		}
+		
+		if (this.paused && !this.menu.Displayed()) {
+			buffer.fillText('Paused',100,100);
+		}
+		
 		// Draw buffer to canvas
 		canvas.drawImage(_buffer, 0, 0);
 		
@@ -351,10 +362,6 @@ function Game() {
 			// if any balls missed, start level over
 			this.RestartLevel();
 		}
-	}
-	
-	this.LoadMenu = function() {
-		console.log('Menu Loaded');
 	}
 	
 	this.MakeBalls = function() {		
@@ -442,7 +449,8 @@ function Game() {
 	}
 	
 	this.DrawScore = function(context,scoreboard) {
-		context.fillText("Score: " + this.score,scoreboard.x + 30,scoreboard.y + 100);
+		context.fillText("Level " + this.level,scoreboard.x + 30,scoreboard.y + 100);
+		context.fillText("Score: " + this.score,scoreboard.x + 30,scoreboard.y + 130);
 	}
 	
 	this.DecreaseSnow = function() {

@@ -3,6 +3,8 @@
     src: url('fonts/Basic.ttf');
 }
 body{
+	margin:0px;
+	padding:0px;
 	color:#000;
 }
 #playfield{
